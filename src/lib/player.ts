@@ -196,13 +196,14 @@ async function playNext(guildId: string): Promise<void> {
     }
 
     const resource = createAudioResource(stream, {
-      inputType: StreamType.OggOpus,
+      inputType: StreamType.Raw,
       inlineVolume: true,
     });
 
     resource.volume?.setVolume(0.5);
     queue.player.play(resource);
     console.log('[playNext] Started playing audio resource');
+    console.log('[playNext] Player state:', queue.player.state.status);
     
     const speedIcon = usedFast ? '⚡' : '🎵';
     await queue.textChannel.send(
