@@ -9,11 +9,11 @@ This bot now uses **POT (Proof-of-Origin) tokens** to bypass YouTube's bot detec
 1. Go to your Railway dashboard: https://railway.app
 2. Click **"New Service"** in your project
 3. Select **"Deploy from Docker Image"**
-4. Enter image: `brainicism/bgutil-ytdlp-pot-provider:latest`
+4. Enter image: `                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   `
 5. Click **"Deploy"**
 
 ### Step 2: Configure POT Provider
-
+                                                                                                                                                                                                                                                                                 
 In the **POT provider service** settings:
 
 1. Go to **Variables** tab

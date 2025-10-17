@@ -9,6 +9,7 @@ RUN apk add --no-cache \
     openssl-dev \
     wget \
     tar \
+    git \
     python3 \
     py3-pip
 
