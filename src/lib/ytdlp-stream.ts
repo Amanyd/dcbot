@@ -24,102 +24,83 @@ const FFMPEG_HTTPS = process.env.FFMPEG_HTTPS_PATH ||
 
 // yt-dlp pipes to ffmpeg, ffmpeg spits opus for discord
 export function createYtdlpStream(url: string): Readable {
+  console.log('[ytdlp-pipe] Using fallback pipe method for:', url);
   const ytdlp = spawn('yt-dlp', [
-    '-f', 'bestaudio/best',
+    '-f', 'bestaudio',
     '-o', '-',
-    '--no-playlist',
-    '--quiet',
-    '--no-warnings',
-    url
-  ], {
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
-  
-  const ffmpeg = spawn('ffmpeg', [
-    '-i', 'pipe:0',
-    '-f', 'opus',
-    '-ar', '48000',
-    '-ac', '2',
-    '-b:a', '128k',
-    '-strict', '-2',
-    '-loglevel', 'warning',
-    'pipe:1'
+    url,
   ]);
 
+  ytdlp.stderr.on('data', (data) => {
+    console.error('[ytdlp-pipe] Error:', data.toString());
+  });
+
+  const ffmpegPath = process.env.FFMPEG_HTTPS_PATH || 'ffmpeg';
+  console.log('[ffmpeg-pipe] Using FFmpeg path:', ffmpegPath);
+  const ffmpeg = spawn(ffmpegPath, [
+    '-i', 'pipe:0',
+    '-analyzeduration', '0',
+    '-loglevel', '0',
+    '-f', 's16le',
+    '-ar', '48000',
+    '-ac', '2',
+    'pipe:1',
+  ]);
+
+  ffmpeg.stderr.on('data', (data) => {
+    console.error('[ffmpeg-pipe] Error:', data.toString());
+  });
+
   ytdlp.stdout.pipe(ffmpeg.stdin);
-  
-  // suppress pipe errors (normal when stream stops)
-  ytdlp.stdout.on('error', () => {});
-  ffmpeg.stdin.on('error', () => {});
-  ytdlp.stderr.on('data', () => {});
-  ffmpeg.stderr.on('data', () => {});
-  
   return ffmpeg.stdout;
 }
 
 // streams from direct url using https ffmpeg (fast af)
-export function createStreamFromUrl(streamUrl: string): Readable {
-  const ffmpeg = spawn(FFMPEG_HTTPS, [
-    '-hide_banner',
-    '-loglevel', 'error',
-    '-headers', 'User-Agent: yt-dlp/2025.10.14',
+export async function createStreamFromUrl(directUrl: string): Promise<Readable> {
+  const ffmpegPath = process.env.FFMPEG_HTTPS_PATH || 'ffmpeg';
+  console.log('[ffmpeg] Using FFmpeg path:', ffmpegPath);
+  console.log('[ffmpeg] Streaming from direct URL');
+  
+  const ffmpeg = spawn(ffmpegPath, [
     '-reconnect', '1',
     '-reconnect_streamed', '1',
     '-reconnect_delay_max', '5',
-    '-i', streamUrl,
+    '-i', directUrl,
     '-analyzeduration', '0',
-    '-probesize', '32',
-    '-buffer_size', '4096',
-    '-f', 'opus',
+    '-loglevel', '0',
+    '-f', 's16le',
     '-ar', '48000',
     '-ac', '2',
-    '-b:a', '128k',
-    '-strict', '-2',
-    'pipe:1'
+    'pipe:1',
   ]);
 
-  ffmpeg.stderr.on('data', () => {}); // ignore errors (normal when track ends)
-  ffmpeg.on('error', () => {});
-  
+  ffmpeg.stderr.on('data', (data) => {
+    console.error('[ffmpeg] Error:', data.toString());
+  });
+
+  ffmpeg.on('error', (err) => {
+    console.error('[ffmpeg] Process error:', err);
+  });
+
   return ffmpeg.stdout;
-}
 
 // grabs direct url for fast streaming (cached for 5h, non-blocking)
 export async function getDirectOpusUrl(url: string): Promise<string | null> {
+  console.log('[ytdlp] Getting direct URL for:', url);
   const videoId = extractVideoId(url);
   
-  if (videoId) {
-    const cached = urlCache.get(videoId);
-    if (cached && Date.now() < cached.expires * 1000) {
+  if (videoId && urlCache.has(videoId)) {
+    const cached = urlCache.get(videoId)!;
+    if (Date.now() < cached.expiresAt) {
+      console.log('[ytdlp] Using cached URL for:', videoId);
       return cached.url;
     }
+    console.log('[ytdlp] Cache expired for:', videoId);
+    urlCache.delete(videoId);
   }
 
+  console.log('[ytdlp] Extracting fresh URL...');
   return new Promise((resolve) => {
-    const ytdlp = spawn('yt-dlp', ['-f', 'bestaudio', '--get-url', url]);
-    let output = '';
-
-    ytdlp.stdout.on('data', (chunk) => output += chunk);
-    
-    ytdlp.on('close', (code) => {
-      if (code === 0 && output.trim().startsWith('http')) {
-        const result = output.trim();
-        if (videoId) {
-          urlCache.set(videoId, {
-            url: result,
-            expires: Math.floor(Date.now() / 1000) + (5 * 60 * 60),
-            clientType: 'default'
-          });
-        }
-        resolve(result);
-      } else {
-        resolve(null);
-      }
-    });
-
-    ytdlp.on('error', () => resolve(null));
-  });
-}
 
 function extractVideoId(url: string): string | null {
   const match = url.match(/(?:v=|\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);

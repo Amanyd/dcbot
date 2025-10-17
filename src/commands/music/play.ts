@@ -41,8 +41,14 @@ export const play: Command = {
 
       await interaction.editReply(result);
     } catch (error) {
-      await interaction.editReply('❌ Failed to play track. Try again!').catch(() => {});
+      console.error('[play] Command error:', error);
+      logger.error('Error in play command:', error);
+      await interaction.editReply({
+        embeds: [createEmbed('error', 'An error occurred while processing your request')],
+      });
     }
+  },
+};
   },
 };
 
