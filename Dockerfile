@@ -7,6 +7,7 @@ RUN apk add --no-cache \
     yt-dlp \
     build-base \
     yasm \
+    nasm \
     pkgconfig \
     openssl-dev \
     git
