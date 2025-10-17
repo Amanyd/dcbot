@@ -1,18 +1,21 @@
 FROM node:22-alpine
 
-# install build deps for ffmpeg
+# Install build dependencies for FFmpeg compilation
 RUN apk add --no-cache \
     bash \
-    python3 \
-    yt-dlp \
     build-base \
-    yasm \
     nasm \
-    pkgconfig \
+    yasm \
     openssl-dev \
-    git
+    wget \
+    tar \
+    python3 \
+    py3-pip
 
-# build ffmpeg with https support
+# Install yt-dlp and POT provider plugin
+RUN pip3 install --no-cache-dir --break-system-packages yt-dlp bgutil-ytdlp-pot-provider
+
+# Download and compile FFmpeg with HTTPS support
 WORKDIR /tmp
 RUN git clone --depth 1 https://git.ffmpeg.org/ffmpeg.git && \
     cd ffmpeg && \
