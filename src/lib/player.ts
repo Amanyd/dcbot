@@ -170,7 +170,7 @@ async function playNext(guildId: string): Promise<void> {
     if (item.cachedUrl) {
       console.log('[playNext] Using cached URL');
       try {
-        stream = createStreamFromUrl(item.cachedUrl);
+        stream = await createStreamFromUrl(item.cachedUrl);
         usedFast = true;
       } catch (err) {
         console.error('[playNext] Cached URL failed, falling back:', err);
@@ -183,7 +183,7 @@ async function playNext(guildId: string): Promise<void> {
       if (directUrl) {
         console.log('[playNext] Got direct URL');
         try {
-          stream = createStreamFromUrl(directUrl);
+          stream = await createStreamFromUrl(directUrl);
           usedFast = true;
         } catch (err) {
           console.error('[playNext] Direct URL failed, falling back:', err);
