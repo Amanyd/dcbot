@@ -22,16 +22,35 @@ const urlCache = new Map<string, CachedURL>();
 const FFMPEG_HTTPS = process.env.FFMPEG_HTTPS_PATH || 
   `${process.env.HOME}/ffmpeg_https/ffmpeg_https.sh`;
 
+// POT provider URL for Railway private networking
+const POT_PROVIDER_URL = process.env.POT_PROVIDER_URL || 'http://localhost:4416';
+
+// Build yt-dlp args with POT provider
+function buildYtdlpArgs(baseArgs: string[]): string[] {
+  const args = [...baseArgs];
+  
+  // Add POT provider for YouTube bot bypass
+  if (process.env.POT_PROVIDER_URL) {
+    console.log('[ytdlp] Using POT provider at:', POT_PROVIDER_URL);
+    args.push('--extractor-args', `youtube:po_token_url=${POT_PROVIDER_URL}/token`);
+  } else {
+    console.log('[ytdlp] No POT provider configured, using client rotation');
+    args.push('--extractor-args', 'youtube:player_client=android,web');
+  }
+  
+  args.push('--no-check-certificates');
+  return args;
+}
+
 // yt-dlp pipes to ffmpeg, ffmpeg spits opus for discord
 export function createYtdlpStream(url: string): Readable {
   console.log('[ytdlp-pipe] Using fallback pipe method for:', url);
-  const ytdlp = spawn('yt-dlp', [
-    '-f', 'bestaudio',
-    '--extractor-args', 'youtube:player_client=android,web',
-    '--no-check-certificates',
-    '-o', '-',
-    url,
-  ]);
+  
+  const baseArgs = ['-f', 'bestaudio', '-o', '-', url];
+  const args = buildYtdlpArgs(baseArgs);
+  
+  console.log('[ytdlp-pipe] Args:', args.join(' '));
+  const ytdlp = spawn('yt-dlp', args);
 
   ytdlp.stderr.on('data', (data) => {
     console.error('[ytdlp-pipe] Error:', data.toString());
@@ -104,13 +123,8 @@ export async function getDirectOpusUrl(url: string): Promise<string | null> {
 
   console.log('[ytdlp] Extracting fresh URL...');
   return new Promise((resolve) => {
-    const args = [
-      '--get-url',
-      '-f', 'bestaudio',
-      '--extractor-args', 'youtube:player_client=android,web',
-      '--no-check-certificates',
-      url,
-    ];
+    const baseArgs = ['--get-url', '-f', 'bestaudio', url];
+    const args = buildYtdlpArgs(baseArgs);
     
     console.log('[ytdlp] Running with args:', args.join(' '));
     const ytdlp = spawn('yt-dlp', args);
@@ -162,17 +176,10 @@ function extractVideoId(url: string): string | null {
 export async function getYtdlpInfo(query: string): Promise<VideoInfo> {
   return new Promise((resolve, reject) => {
     const isUrl = query.startsWith('http://') || query.startsWith('https://');
-    const baseArgs = [
-      '--dump-json',
-      '--no-playlist',
-      '--skip-download',
-      '--extractor-args', 'youtube:player_client=android,web',
-      '--no-check-certificates',
-    ];
+    const searchQuery = isUrl ? query : `ytsearch1:${query}`;
     
-    const args = isUrl 
-      ? [...baseArgs, query]
-      : [...baseArgs, `ytsearch1:${query}`];
+    const baseArgs = ['--dump-json', '--no-playlist', '--skip-download', searchQuery];
+    const args = buildYtdlpArgs(baseArgs);
 
     console.log('[ytdlp-info] Running:', args.join(' '));
     const ytdlp = spawn('yt-dlp', args);

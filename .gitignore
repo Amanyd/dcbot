@@ -6,6 +6,8 @@ node_modules/
 .env.local
 .env.production
 DEPLOYMENT.md
+RAILWAY_POT_SETUP.md
+iss.md
 # Build output
 dist/
 build/
