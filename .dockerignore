@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+*.md
+.git
+.gitignore
+speed.md
+det.md
+SUCCESS.md
+OPTIMIZATION.md
