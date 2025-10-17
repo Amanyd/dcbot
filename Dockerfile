@@ -34,7 +34,15 @@ RUN ffmpeg -protocols 2>&1 | grep https
 WORKDIR /app
 COPY package*.json ./
 RUN npm ci --only=production
+
+# install typescript for build
+RUN npm install -g typescript
+
+# copy source code
 COPY . .
+
+# build typescript
+RUN npm run build
 
 # ffmpeg is at /usr/local/bin/ffmpeg
 ENV FFMPEG_HTTPS_PATH=/usr/local/bin/ffmpeg
