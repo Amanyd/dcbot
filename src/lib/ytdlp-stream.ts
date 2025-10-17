@@ -27,6 +27,8 @@ export function createYtdlpStream(url: string): Readable {
   console.log('[ytdlp-pipe] Using fallback pipe method for:', url);
   const ytdlp = spawn('yt-dlp', [
     '-f', 'bestaudio',
+    '--extractor-args', 'youtube:player_client=android,web',
+    '--no-check-certificates',
     '-o', '-',
     url,
   ]);
@@ -102,11 +104,16 @@ export async function getDirectOpusUrl(url: string): Promise<string | null> {
 
   console.log('[ytdlp] Extracting fresh URL...');
   return new Promise((resolve) => {
-    const ytdlp = spawn('yt-dlp', [
+    const args = [
       '--get-url',
       '-f', 'bestaudio',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--no-check-certificates',
       url,
-    ]);
+    ];
+    
+    console.log('[ytdlp] Running with args:', args.join(' '));
+    const ytdlp = spawn('yt-dlp', args);
 
     let output = '';
     let errorOutput = '';
@@ -155,10 +162,19 @@ function extractVideoId(url: string): string | null {
 export async function getYtdlpInfo(query: string): Promise<VideoInfo> {
   return new Promise((resolve, reject) => {
     const isUrl = query.startsWith('http://') || query.startsWith('https://');
+    const baseArgs = [
+      '--dump-json',
+      '--no-playlist',
+      '--skip-download',
+      '--extractor-args', 'youtube:player_client=android,web',
+      '--no-check-certificates',
+    ];
+    
     const args = isUrl 
-      ? ['--dump-json', '--no-playlist', '--skip-download', query]
-      : ['--dump-json', '--no-playlist', '--skip-download', `ytsearch1:${query}`];
+      ? [...baseArgs, query]
+      : [...baseArgs, `ytsearch1:${query}`];
 
+    console.log('[ytdlp-info] Running:', args.join(' '));
     const ytdlp = spawn('yt-dlp', args);
     let data = '';
     let errorData = '';
@@ -170,6 +186,7 @@ export async function getYtdlpInfo(query: string): Promise<VideoInfo> {
       if (code === 0 && data) {
         try {
           const info = JSON.parse(data);
+          console.log('[ytdlp-info] Successfully got info for:', info.title);
           resolve({
             title: info.title || 'Unknown',
             duration: info.duration || 0,
@@ -178,14 +195,20 @@ export async function getYtdlpInfo(query: string): Promise<VideoInfo> {
             uploader: info.uploader || 'Unknown'
           });
         } catch (err) {
+          console.error('[ytdlp-info] Failed to parse JSON:', err);
           reject(new Error('Failed to parse video info'));
         }
       } else {
+        console.error('[ytdlp-info] Failed. Exit code:', code);
+        console.error('[ytdlp-info] Error:', errorData);
         reject(new Error(`yt-dlp failed: ${errorData || 'Unknown error'}`));
       }
     });
 
-    ytdlp.on('error', (err) => reject(new Error(`Failed to spawn yt-dlp: ${err.message}`)));
+    ytdlp.on('error', (err) => {
+      console.error('[ytdlp-info] Spawn error:', err);
+      reject(new Error(`Failed to spawn yt-dlp: ${err.message}`));
+    });
   });
 }
 
