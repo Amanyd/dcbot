@@ -57,13 +57,17 @@ export async function play(
   query: string,
   requestedBy: string
 ): Promise<string> {
+  console.log('[player] Play request for query:', query);
   try {
+    console.log('[player] Getting video info...');
     const info = await getYtdlpInfo(query);
+    console.log('[player] Got video info:', info.title);
     const guildId = voiceChannel.guild.id;
     
     let queue = getQueue(guildId);
     
     if (!queue) {
+      console.log('[player] Creating new queue for guild:', guildId);
       const connection = joinVoiceChannel({
         channelId: voiceChannel.id,
         guildId: guildId,
@@ -77,6 +81,7 @@ export async function play(
 
       const subscription = connection.subscribe(player);
       if (!subscription) {
+        console.error('[player] Failed to subscribe player to connection');
         throw new Error('Failed to subscribe player to connection');
       }
 
@@ -93,33 +98,46 @@ export async function play(
       guildQueues.set(guildId, queue);
 
       player.on(AudioPlayerStatus.Idle, () => playNext(guildId));
-      player.on('error', () => playNext(guildId));
+      player.on('error', (err) => {
+        console.error('[player] Player error:', err);
+        playNext(guildId);
+      });
+      console.log('[player] Queue created successfully');
     }
 
     const queueItem: QueueItem = { info, requestedBy };
     queue.items.push(queueItem);
+    console.log('[player] Added to queue. Queue length:', queue.items.length);
 
     if (!queue.isPlaying) {
+      console.log('[player] Queue not playing, starting playback...');
       playNext(guildId);
       return `▶️ **Now playing:** ${info.title}\n🕒 Duration: ${formatDuration(info.duration)}`;
     }
 
     // pre-fetch url for next track (makes it start instant)
     if (queue.items.length === 1) {
+      console.log('[player] Pre-fetching URL for next track');
       getDirectOpusUrl(queueItem.info.url).then(url => {
-        if (url) queueItem.cachedUrl = url;
+        if (url) {
+          queueItem.cachedUrl = url;
+          console.log('[player] Pre-fetched URL successfully');
+        }
       }).catch(() => {});
     }
 
     return `✅ **Added to queue:** ${info.title}\n📍 Position: ${queue.items.length}\n🕒 Duration: ${formatDuration(info.duration)}`;
   } catch (error) {
+    console.error('[player] Play error:', error);
     throw error;
   }
 }
 
 async function playNext(guildId: string): Promise<void> {
+  console.log('[playNext] Called for guild:', guildId);
   const queue = getQueue(guildId);
   if (!queue || queue.items.length === 0) {
+    console.log('[playNext] Queue empty or not found');
     if (queue) {
       queue.isPlaying = false;
       queue.currentItem = null;
@@ -131,11 +149,16 @@ async function playNext(guildId: string): Promise<void> {
   const item = queue.items.shift()!;
   queue.currentItem = item;
   queue.isPlaying = true;
+  console.log('[playNext] Playing:', item.info.title);
 
   // pre-fetch next track while this one plays
   if (queue.items.length > 0 && !queue.items[0].cachedUrl) {
+    console.log('[playNext] Pre-fetching next track');
     getDirectOpusUrl(queue.items[0].info.url).then(url => {
-      if (url) queue.items[0].cachedUrl = url;
+      if (url) {
+        queue.items[0].cachedUrl = url;
+        console.log('[playNext] Pre-fetched next track successfully');
+      }
     }).catch(() => {});
   }
 
@@ -145,23 +168,29 @@ async function playNext(guildId: string): Promise<void> {
 
     // try fast path first (direct url)
     if (item.cachedUrl) {
+      console.log('[playNext] Using cached URL');
       try {
         stream = createStreamFromUrl(item.cachedUrl);
         usedFast = true;
-      } catch {
+      } catch (err) {
+        console.error('[playNext] Cached URL failed, falling back:', err);
         stream = createYtdlpStream(item.info.url);
       }
     } else {
+      console.log('[playNext] No cached URL, extracting...');
       const directUrl = await getDirectOpusUrl(item.info.url).catch(() => null);
       
       if (directUrl) {
+        console.log('[playNext] Got direct URL');
         try {
           stream = createStreamFromUrl(directUrl);
           usedFast = true;
-        } catch {
+        } catch (err) {
+          console.error('[playNext] Direct URL failed, falling back:', err);
           stream = createYtdlpStream(item.info.url);
         }
       } else {
+        console.log('[playNext] No direct URL, using pipe method');
         stream = createYtdlpStream(item.info.url);
       }
     }
@@ -173,6 +202,7 @@ async function playNext(guildId: string): Promise<void> {
 
     resource.volume?.setVolume(0.5);
     queue.player.play(resource);
+    console.log('[playNext] Started playing audio resource');
     
     const speedIcon = usedFast ? '⚡' : '🎵';
     await queue.textChannel.send(
@@ -181,6 +211,7 @@ async function playNext(guildId: string): Promise<void> {
       `👤 Requested by: ${item.requestedBy}`
     ).catch(() => {});
   } catch (error) {
+    console.error('[playNext] Error playing track:', error);
     queue.isPlaying = false;
     playNext(guildId);
   }

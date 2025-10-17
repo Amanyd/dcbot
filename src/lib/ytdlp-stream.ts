@@ -83,6 +83,7 @@ export async function createStreamFromUrl(directUrl: string): Promise<Readable> 
   });
 
   return ffmpeg.stdout;
+}
 
 // grabs direct url for fast streaming (cached for 5h, non-blocking)
 export async function getDirectOpusUrl(url: string): Promise<string | null> {
@@ -91,7 +92,7 @@ export async function getDirectOpusUrl(url: string): Promise<string | null> {
   
   if (videoId && urlCache.has(videoId)) {
     const cached = urlCache.get(videoId)!;
-    if (Date.now() < cached.expiresAt) {
+    if (Date.now() < cached.expires) {
       console.log('[ytdlp] Using cached URL for:', videoId);
       return cached.url;
     }
@@ -101,6 +102,49 @@ export async function getDirectOpusUrl(url: string): Promise<string | null> {
 
   console.log('[ytdlp] Extracting fresh URL...');
   return new Promise((resolve) => {
+    const ytdlp = spawn('yt-dlp', [
+      '--get-url',
+      '-f', 'bestaudio',
+      url,
+    ]);
+
+    let output = '';
+    let errorOutput = '';
+
+    ytdlp.stdout.on('data', (data) => {
+      output += data.toString();
+    });
+
+    ytdlp.stderr.on('data', (data) => {
+      errorOutput += data.toString();
+    });
+
+    ytdlp.on('close', (code) => {
+      if (code === 0 && output.trim()) {
+        const directUrl = output.trim();
+        console.log('[ytdlp] Successfully extracted URL');
+        if (videoId) {
+          urlCache.set(videoId, {
+            url: directUrl,
+            expires: Date.now() + (5 * 60 * 60 * 1000), // 5 hours
+            clientType: 'web'
+          });
+          console.log('[ytdlp] Cached URL for:', videoId);
+        }
+        resolve(directUrl);
+      } else {
+        console.error('[ytdlp] Failed to extract URL. Exit code:', code);
+        if (errorOutput) console.error('[ytdlp] Error:', errorOutput);
+        resolve(null);
+      }
+    });
+
+    ytdlp.on('error', (err) => {
+      console.error('[ytdlp] Process error:', err);
+      resolve(null);
+    });
+  });
+}
 
 function extractVideoId(url: string): string | null {
   const match = url.match(/(?:v=|\/|youtu\.be\/)([a-zA-Z0-9_-]{11})/);
