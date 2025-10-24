@@ -88,12 +88,21 @@ export async function createStreamFromUrl(directUrl: string): Promise<Readable> 
     '-reconnect_delay_max', '5',
     '-i', directUrl,
     '-analyzeduration', '0',
-    '-loglevel', '0',
+    '-loglevel', 'error',
     '-f', 's16le',
     '-ar', '48000',
     '-ac', '2',
     'pipe:1',
   ]);
+
+  let firstData = false;
+  
+  ffmpeg.stdout.on('data', (chunk) => {
+    if (!firstData) {
+      console.log('[ffmpeg] First data received, chunk size:', chunk.length);
+      firstData = true;
+    }
+  });
 
   ffmpeg.stderr.on('data', (data) => {
     console.error('[ffmpeg] Error:', data.toString());
@@ -101,6 +110,14 @@ export async function createStreamFromUrl(directUrl: string): Promise<Readable> 
 
   ffmpeg.on('error', (err) => {
     console.error('[ffmpeg] Process error:', err);
+  });
+  
+  ffmpeg.on('close', (code) => {
+    console.log('[ffmpeg] Process closed with code:', code);
+  });
+  
+  ffmpeg.on('exit', (code, signal) => {
+    console.log('[ffmpeg] Process exited. Code:', code, 'Signal:', signal);
   });
 
   return ffmpeg.stdout;

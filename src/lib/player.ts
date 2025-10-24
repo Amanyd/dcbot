@@ -201,6 +201,20 @@ async function playNext(guildId: string): Promise<void> {
     });
 
     resource.volume?.setVolume(0.5);
+    
+    // Listen for resource errors
+    resource.playStream.on('error', (err) => {
+      console.error('[playNext] Stream error:', err);
+    });
+    
+    resource.playStream.on('end', () => {
+      console.log('[playNext] Stream ended normally');
+    });
+    
+    resource.playStream.on('close', () => {
+      console.log('[playNext] Stream closed');
+    });
+    
     queue.player.play(resource);
     console.log('[playNext] Started playing audio resource');
     console.log('[playNext] Player state:', queue.player.state.status);
